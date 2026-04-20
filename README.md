@@ -1,3 +1,32 @@
+
+# Overture, with Folders.
+
+A fork of Overture with support for `/` notation to indicate a Folder containing Overture Modules.
+
+Example:
+```lua
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Overture = require(ReplicatedStorage:WaitForChild("Overture"))
+
+--/ Test is a folder tagged with "oLibrary", so it's child-modules are only available from "Test/"
+local TestA = Overture:LoadLibrary("Test/A")
+local TestC = Overture:LoadLibrary("Test/C")
+local OuterA = Overture:LoadLibrary("A")
+local OuterB = Overture:LoadLibrary("B")
+
+print(TestA)
+print(TestC)
+print(OuterA)
+print(OuterB)
+print(TestA ~= OuterA) -- true
+```
+
+> [!NOTE]
+> You (currently) cannot have multiple Folders chained with oLibrary to build a path.
+> Trying to do something like `Overture:LoadLibrary("Foo/Bar/Baz/Module")` will not work as it only supports the first folder preceding a `/`, whilst the rest is treated as the Index.
+
+## Original README
+
 <div align="center">
 	<img src="https://raw.githubusercontent.com/devSparkle/overture-vscode/main/assets/icon-dark.png#gh-light-mode-only" alt="Overture" height="150" />
 	<img src="https://raw.githubusercontent.com/devSparkle/overture-vscode/main/assets/icon.png#gh-dark-mode-only" alt="Overture" height="150" />
