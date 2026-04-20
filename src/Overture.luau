@@ -20,6 +20,7 @@ local CollectionService = game:GetService("CollectionService")
 local Overture = {}
 local LibraryThreadCache = {}
 local Libraries: {[string]: ModuleScript} = {}
+local FolderedLibraries: {[string]: { [string]: ModuleScript }} = {}
 
 --// Functions
 
@@ -112,14 +113,26 @@ end
 	@tag Library Management
 	
 	@yields
-	@param Index -- The name of the ModuleScript
+	@param Index -- The name of the ModuleScript, or the name to the ModuleScript in the case of foldered libraries, in the format "Folder/Module"
 	@param NamedImports -- When provided, returns the named variables instead of the entire ModuleScript
 	@return any?
 	
 	@error The library `Index` does not exist! -- Thrown on the server, if no ModuleScript exists with the given name.
 ]=]
 function Overture:LoadLibrary(Index: string, NamedImports: {string}?)
-	if Libraries[Index] then
+	local PathParts = Index:split("/") -- (Folder, Library)
+	local UsesPath = #PathParts == 2
+	if UsesPath and FolderedLibraries[PathParts[1]] then
+		local Folder = FolderedLibraries[PathParts[1]]
+		if Folder and Folder[PathParts[2]] then
+			return RequireModule(Folder[PathParts[2]], NamedImports)
+		else
+			print(FolderedLibraries)
+			assert(not RunService:IsServer(), "The foldered library \"" .. PathParts[1] .. "\" does not exist!")
+			table.insert(LibraryThreadCache, {Thread = coroutine.running(), RequestedIndex = Index, RequestedAt = time()})
+			return RequireModule(coroutine.yield(), NamedImports)
+		end
+	elseif Libraries[Index] then
 		return RequireModule(Libraries[Index], NamedImports)
 	else
 		assert(not RunService:IsServer(), "The library \"" .. Index .. "\" does not exist!")
@@ -239,7 +252,26 @@ function Overture:WaitFor(InstanceClass: string, InstanceName: string, Parent: I
 end
 
 task.spawn(BindToTag, "oLibrary", function(Object)
-	Libraries[Object.Name] = Object
+	if Object:IsA("Folder") then
+		FolderedLibraries[Object.Name] = {}
+		for _, Child in Object:GetChildren() do
+			if Child:IsA("ModuleScript") and Child:HasTag("oLibrary") then
+				FolderedLibraries[Object.Name][Child.Name] = Child
+			end
+		end
+		return
+	elseif Object.Parent and Object.Parent:IsA("Folder") and Object.Parent:HasTag("oLibrary") and Object:HasTag("oLibrary") then
+		--/ Allows for clashing names of modules, as one can be in the Main Libraries, whereas another can be in a different folder or location.
+		if not FolderedLibraries[Object.Parent.Name] then
+			FolderedLibraries[Object.Parent.Name] = {}
+		end
+		local List = FolderedLibraries[Object.Parent.Name]
+		if not table.find(List, Object) then
+			FolderedLibraries[Object.Parent.Name][Object.Name] = Object
+		end
+	else
+		Libraries[Object.Name] = Object
+	end
 	
 	for _, Cached in LibraryThreadCache do
 		if Object.Name == Cached.RequestedIndex then
